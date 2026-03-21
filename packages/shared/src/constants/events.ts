@@ -3,6 +3,7 @@ export const WS_EVENTS = {
     AGENT_HEARTBEAT: 'agent:heartbeat',
     AGENT_STATUS: 'agent:status',
     AGENT_COMMAND_RESULT: 'agent:command:result',
+    AGENT_LOCAL_USERS: 'agent:local:users',
   
     // Сервер → Агент
     SERVER_COMMAND: 'server:command',
