@@ -2,12 +2,13 @@ import { io, Socket } from 'socket.io-client'
 import { log as logger } from '../utils/logger.js'
 import { config } from '../utils/config.js'
 import { setOnlineStatus } from '../local-server.js'
-import { getSystemInfo } from '../utils/sysinfo.js'
+import { getSystemInfo, getLocalUsers } from '../utils/sysinfo.js'
 import { executeCommand } from '../handlers/index.js'
 import {
   WS_EVENTS,
   CommandPayloadSchema,
   HeartbeatPayloadSchema,
+  LocalUsersPayloadSchema,
 } from '@pc-remote/shared'
 import { resetAgentConfig } from '../utils/config.js'
 
@@ -43,6 +44,7 @@ export async function connectToServer(tokenOverride?: string): Promise<void> {
     logger.info('Connected to server')
     setOnlineStatus(true)
     startHeartbeat()
+    sendLocalUsers()
   })
 
   socket.on('disconnect', (reason) => {
@@ -111,6 +113,21 @@ export async function connectToServer(tokenOverride?: string): Promise<void> {
       updateSchedule(payload)
     }).catch((err) => logger.error({ err }, 'Failed to update schedule'))
   })
+}
+
+function sendLocalUsers() {
+  if (!socket?.connected) return
+
+  try {
+    const payload = LocalUsersPayloadSchema.parse({
+      deviceId: config.deviceId,
+      users: getLocalUsers(),
+    })
+    socket.emit(WS_EVENTS.AGENT_LOCAL_USERS, payload)
+    logger.debug({ count: payload.users.length }, 'Local users sent')
+  } catch (err) {
+    logger.error({ err }, 'Failed to send local users')
+  }
 }
 
 function startHeartbeat() {

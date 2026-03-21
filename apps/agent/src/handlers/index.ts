@@ -17,13 +17,15 @@ export async function executeCommand(payload: CommandPayload): Promise<void> {
   switch (type) {
     case 'SHUTDOWN':
       execSync(
-        `shutdown /s /t ${delaySeconds}${message ? ` /c "${message}"` : ''}`
+        `shutdown /s /t ${delaySeconds}${message ? ` /c "${message}"` : ''}`,
+        { windowsHide: true }
       )
       break
 
     case 'REBOOT':
       execSync(
-        `shutdown /r /t ${delaySeconds}${message ? ` /c "${message}"` : ''}`
+        `shutdown /r /t ${delaySeconds}${message ? ` /c "${message}"` : ''}`,
+        { windowsHide: true }
       )
       break
 
@@ -37,7 +39,7 @@ export async function executeCommand(payload: CommandPayload): Promise<void> {
       break
 
     case 'SLEEP':
-      execSync('rundll32.exe powrprof.dll,SetSuspendState 0,1,0')
+      execSync('rundll32.exe powrprof.dll,SetSuspendState 0,1,0', { windowsHide: true })
       break
 
     default:
@@ -52,7 +54,7 @@ export function cancelShutdown(): void {
     return
   }
   try {
-    execSync('shutdown /a')
+    execSync('shutdown /a', { windowsHide: true })
     logger.info('Shutdown cancelled')
   } catch {
     // Нет активного shutdown — это нормально

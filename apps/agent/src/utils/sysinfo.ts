@@ -123,7 +123,7 @@ function parseQueryUserOutput(output: string): ActiveUser[] {
 function getActiveUsers(): ActiveUser[] {
   try {
     if (process.platform === 'win32') {
-      const output = execSync('query user 2>nul', { encoding: 'utf-8' })
+      const output = execSync('query user 2>nul', { encoding: 'utf-8', windowsHide: true })
       return parseQueryUserOutput(output)
     }
 
@@ -145,6 +145,39 @@ function getActiveUsers(): ActiveUser[] {
         }
       })
       .filter((u): u is ActiveUser => u !== null)
+  } catch {
+    return []
+  }
+}
+
+export interface LocalUser {
+  name: string
+  fullName: string
+  enabled: boolean
+}
+
+// Получить всех локальных пользователей Windows через PowerShell Get-LocalUser
+export function getLocalUsers(): LocalUser[] {
+  if (process.platform !== 'win32') return []
+
+  try {
+    const output = execSync(
+      'powershell.exe -NonInteractive -NoProfile -Command "Get-LocalUser | Select-Object Name,Enabled,FullName | ConvertTo-Json -Compress"',
+      { encoding: 'utf-8', windowsHide: true }
+    )
+
+    const parsed: unknown = JSON.parse(output.trim())
+    const arr = Array.isArray(parsed) ? parsed : [parsed]
+
+    return arr
+      .filter((u): u is Record<string, unknown> => typeof u === 'object' && u !== null)
+      .filter((u) => !isServiceAccount(String(u['Name'] ?? '')))
+      .map((u) => ({
+        name: String(u['Name'] ?? ''),
+        fullName: String(u['FullName'] ?? ''),
+        enabled: Boolean(u['Enabled'] ?? true),
+      }))
+      .filter((u) => u.name)
   } catch {
     return []
   }
