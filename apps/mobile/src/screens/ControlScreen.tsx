@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useDevicesStore } from '../store/devices'
-import type { ActiveUser } from '../store/devices'
+import type { ActiveUser, LocalUser } from '../store/devices'
 import type { RootStackParams } from '../navigation'
 
 type Props = NativeStackScreenProps<RootStackParams, 'Control'>
@@ -45,6 +45,27 @@ function UserRow({ user }: { user: ActiveUser }) {
   )
 }
 
+function LocalUserRow({ user }: { user: LocalUser }) {
+  return (
+    <View style={styles.userRow}>
+      <View style={styles.userIcon}>
+        <Text style={styles.userIconText}>👤</Text>
+      </View>
+      <View style={styles.userInfo}>
+        <Text style={styles.userName}>{user.name}</Text>
+        {user.fullName ? (
+          <Text style={styles.userMeta}>{user.fullName}</Text>
+        ) : null}
+      </View>
+      <View style={[styles.userStateBadge, { backgroundColor: user.enabled ? '#4ade8022' : '#88888822' }]}>
+        <Text style={[styles.userStateText, { color: user.enabled ? '#4ade80' : '#888' }]}>
+          {user.enabled ? 'Активен' : 'Отключён'}
+        </Text>
+      </View>
+    </View>
+  )
+}
+
 interface CommandButtonProps {
   label: string
   emoji: string
@@ -66,9 +87,14 @@ function CommandButton({ label, emoji, color, onPress }: CommandButtonProps) {
 
 export default function ControlScreen({ route }: Props) {
   const { deviceId, deviceName } = route.params
-  const { sendCommand, devices } = useDevicesStore()
+  const { sendCommand, devices, localUsers, fetchLocalUsers } = useDevicesStore()
   const navigation = useNavigation<Nav>()
   const device = devices.find((d) => d.id === deviceId)
+  const deviceLocalUsers = localUsers[deviceId] ?? []
+
+  useEffect(() => {
+    void fetchLocalUsers(deviceId)
+  }, [deviceId])
 
   const [delayModal, setDelayModal] = useState(false)
   const [pendingCommand, setPendingCommand] = useState<string | null>(null)
@@ -186,6 +212,18 @@ export default function ControlScreen({ route }: Props) {
           <View style={styles.usersCard}>
             {device.activeUsers.map((u, i) => (
               <UserRow key={u.name + i} user={u} />
+            ))}
+          </View>
+        </>
+      )}
+
+      {/* Учётные записи ПК */}
+      {deviceLocalUsers.length > 0 && (
+        <>
+          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Учётные записи ПК</Text>
+          <View style={styles.usersCard}>
+            {deviceLocalUsers.map((u) => (
+              <LocalUserRow key={u.id} user={u} />
             ))}
           </View>
         </>
