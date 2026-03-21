@@ -66,8 +66,27 @@ const devicesPrivateRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
+  // Локальные пользователи Windows на устройстве
+  app.get<{ Params: { id: string } }>('/:id/users', async (request, reply) => {
+    const device = await app.prisma.device.findFirst({
+      where: { id: request.params.id, userId: request.user.userId },
+      select: { id: true },
+    })
+
+    if (!device) {
+      return reply.status(404).send({ error: 'Device not found' })
+    }
+
+    const users = await app.prisma.deviceUser.findMany({
+      where: { deviceId: request.params.id },
+      orderBy: { name: 'asc' },
+    })
+
+    return reply.send(users)
+  })
+
   // История команд устройства
-app.get<{ Params: { id: string } }>(
+  app.get<{ Params: { id: string } }>(
   '/:id/commands',
   async (request, reply) => {
     try {
