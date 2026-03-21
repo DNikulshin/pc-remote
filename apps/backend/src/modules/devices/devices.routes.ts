@@ -4,6 +4,7 @@ import {
   BindDeviceSchema,
   SendCommandSchema,
   UpdateScheduleSchema,
+  BonusTimeSchema,
 } from './devices.schema.js'
 
 // Публичные роуты (без аутентификации)
@@ -172,6 +173,27 @@ const devicesPrivateRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   )
+
+  app.post<{ Params: { id: string } }>('/:id/schedule/bonus', async (request, reply) => {
+    const body = BonusTimeSchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.status(400).send({ error: body.error.flatten() })
+    }
+
+    try {
+      const result = await service.addBonusTime(
+        request.user.userId,
+        request.params.id,
+        body.data
+      )
+      return reply.status(200).send(result)
+    } catch (err) {
+      if (err instanceof DeviceError) {
+        return reply.status(err.statusCode).send({ error: err.message })
+      }
+      throw err
+    }
+  })
 
   app.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
     try {

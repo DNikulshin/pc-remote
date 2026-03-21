@@ -91,6 +91,10 @@ model Schedule {
   timezone  String   @default("UTC")
   // Хранится как JSON: { "1": [{start:"09:00", end:"21:00"}], "2": [...] }
   days      Json     @default("{}")
+  // Комендантский час: { enabled, start: "HH:MM", end: "HH:MM" }
+  downtime  Json     @default("{}")
+  // Дневной лимит: { enabled, minutesWeekday, minutesWeekend }
+  dailyLimit Json    @default("{}")
 
   updatedAt DateTime @updatedAt
 }

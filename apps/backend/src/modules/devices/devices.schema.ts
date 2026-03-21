@@ -13,20 +13,29 @@ export const SendCommandSchema = z.object({
   message: z.string().max(200).optional(),
 })
 
+const TimeSchema = z.string().regex(/^\d{2}:\d{2}$/)
+
 export const UpdateScheduleSchema = z.object({
   enabled: z.boolean(),
   timezone: z.string(),
-  days: z.record(
-    z.string(),
-    z.array(
-      z.object({
-        start: z.string().regex(/^\d{2}:\d{2}$/),
-        end: z.string().regex(/^\d{2}:\d{2}$/),
-      })
-    )
-  ),
+  days: z.record(z.string(), z.array(z.object({ start: TimeSchema, end: TimeSchema }))),
+  downtime: z.object({
+    enabled: z.boolean(),
+    start: TimeSchema,
+    end: TimeSchema,
+  }).optional(),
+  dailyLimit: z.object({
+    enabled: z.boolean(),
+    minutesWeekday: z.number().int().min(1).max(1440),
+    minutesWeekend: z.number().int().min(1).max(1440),
+  }).optional(),
+})
+
+export const BonusTimeSchema = z.object({
+  minutes: z.number().int().min(1).max(120),
 })
 
 export type BindDeviceInput = z.infer<typeof BindDeviceSchema>
 export type SendCommandInput = z.infer<typeof SendCommandSchema>
 export type UpdateScheduleInput = z.infer<typeof UpdateScheduleSchema>
+export type BonusTimeInput = z.infer<typeof BonusTimeSchema>

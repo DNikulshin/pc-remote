@@ -7,6 +7,7 @@ import type {
   BindDeviceInput,
   SendCommandInput,
   UpdateScheduleInput,
+  BonusTimeInput,
 } from './devices.schema.js'
 
 export class DeviceError extends Error {
@@ -208,6 +209,21 @@ export class DevicesService {
     })
 
     return schedule
+  }
+
+  async addBonusTime(userId: string, deviceId: string, input: BonusTimeInput) {
+    const device = await this.prisma.device.findFirst({
+      where: { id: deviceId, userId },
+    })
+    if (!device) throw new DeviceError('Device not found', 404)
+
+    // Отправляем бонусное время агенту через WebSocket
+    const delivered = this.app.sendCommand(deviceId, {
+      event: WS_EVENTS.SERVER_BONUS_UPDATE,
+      minutes: input.minutes,
+    })
+
+    return { minutes: input.minutes, delivered }
   }
 
   async deleteDevice(userId: string, deviceId: string) {
