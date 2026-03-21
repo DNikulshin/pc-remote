@@ -108,10 +108,23 @@ export async function connectToServer(tokenOverride?: string): Promise<void> {
   // Обновление расписания
   socket.on(WS_EVENTS.SERVER_SCHEDULE_UPDATE, (payload: unknown) => {
     logger.info('Schedule update received')
-    // Импортируем динамически чтобы избежать circular dependency
     import('../schedule/store.js').then(({ updateSchedule }) => {
       updateSchedule(payload)
     }).catch((err) => logger.error({ err }, 'Failed to update schedule'))
+  })
+
+  // Бонусное время — добавляем минуты к сегодняшнему счётчику
+  socket.on(WS_EVENTS.SERVER_BONUS_UPDATE, (payload: unknown) => {
+    const minutes = (payload as Record<string, unknown>)?.['minutes']
+    if (typeof minutes !== 'number' || minutes <= 0) return
+
+    import('../schedule/tracker.js').then(({ addBonusMinutes }) => {
+      import('../schedule/store.js').then(({ getSchedule }) => {
+        const schedule = getSchedule()
+        addBonusMinutes(schedule?.timezone ?? 'UTC', minutes)
+        logger.info({ minutes }, 'Bonus time received')
+      }).catch(() => {})
+    }).catch((err) => logger.error({ err }, 'Failed to add bonus time'))
   })
 }
 
