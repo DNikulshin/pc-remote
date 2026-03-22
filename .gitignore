@@ -13,6 +13,11 @@ build/
 # Agent runtime files
 apps/agent/.agent-config.json
 apps/agent/logs/
+apps/agent/dist-win/
+
+# Installer build artifacts
+installer/output/
+installer/winsw/
 
 # Prisma generated
 apps/backend/node_modules/.prisma/
