@@ -19,7 +19,7 @@ Write-Host "`n=== Building APK ===" -ForegroundColor Cyan
 
 docker run --rm `
     -e EXPO_TOKEN=$ExpoToken `
-    -e GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false" `
+    -e GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx1g -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2" `
     -v "${Root}:/repo" `
     -w /repo/apps/mobile `
     $ImageName `

@@ -73,7 +73,7 @@ jobs:
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx2g -Dorg.gradle.daemon=false'
+          GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx2g -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2'
         run: eas build --platform android --profile preview --non-interactive --local --output ./build/app.apk
 
       - name: Upload APK artifact
