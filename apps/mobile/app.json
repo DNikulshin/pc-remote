@@ -33,10 +33,10 @@
     "plugins": [
       "expo-secure-store"
     ],
-    "owner": "dnikulshinwork",
+    "owner": "dnikulshun",
     "extra": {
       "eas": {
-        "projectId": "7564dfe1-6110-4254-8472-8fcaf5bb05eb"
+        "projectId": "ca54408d-7646-4c85-b64c-9f741803afcf"
       }
     }
   }
