@@ -1,4 +1,4 @@
-# setup.ps1 - Check and install build requirements for pc-remote
+# setup.ps1 - Check and install dev environment requirements for pc-remote
 # Run as Administrator for Inno Setup and Docker installs
 
 $ErrorActionPreference = "Stop"
@@ -18,7 +18,7 @@ function Write-Status($status, $name, $detail = "") {
 }
 
 Write-Host ""
-Write-Host "=== pc-remote: checking build requirements ===" -ForegroundColor Cyan
+Write-Host "=== pc-remote: checking dev environment ===" -ForegroundColor Cyan
 Write-Host ""
 
 $allOk = $true
@@ -80,6 +80,45 @@ if ($innoInPath -or (Test-Path $innoPath)) {
     winget install --id JRSoftware.InnoSetup --accept-source-agreements --accept-package-agreements
 }
 
+# ── Git ──────────────────────────────────────────────────────────────────────
+if (Test-Command "git") {
+    $v = git --version
+    Write-Status $OK "Git" $v
+} else {
+    $allOk = $false
+    Write-Status $MISS "Git"
+    Write-Status $INST "Git" "winget install Git.Git"
+    winget install --id Git.Git --accept-source-agreements --accept-package-agreements
+}
+
+# ── ngrok ─────────────────────────────────────────────────────────────────────
+$ngrokCmd = Get-Command "ngrok" -ErrorAction SilentlyContinue
+if (-not $ngrokCmd) {
+    # winget installs to a non-PATH location — search it
+    $ngrokWinget = Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Ngrok.Ngrok*\ngrok.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($ngrokWinget) { $ngrokCmd = $ngrokWinget }
+}
+
+if ($ngrokCmd) {
+    $ngrokPath = if ($ngrokCmd -is [System.IO.FileInfo]) { $ngrokCmd.FullName } else { $ngrokCmd.Source }
+    Write-Status $OK "ngrok" $ngrokPath
+    # Check auth token configured
+    $ngrokConfig = "$env:USERPROFILE\AppData\Local\ngrok\ngrok.yml"
+    if (-not (Test-Path $ngrokConfig)) {
+        Write-Host "  [WARN] ngrok auth token not configured." -ForegroundColor Yellow
+        Write-Host "         Run: ngrok config add-authtoken YOUR_TOKEN" -ForegroundColor DarkGray
+        Write-Host "         Get token at: https://dashboard.ngrok.com/get-started/your-authtoken" -ForegroundColor DarkGray
+    }
+} else {
+    $allOk = $false
+    Write-Status $MISS "ngrok"
+    Write-Status $INST "ngrok" "winget install Ngrok.Ngrok"
+    winget install --id Ngrok.Ngrok --accept-source-agreements --accept-package-agreements
+    Write-Host "  After install, configure auth token:" -ForegroundColor Yellow
+    Write-Host "    ngrok config add-authtoken YOUR_TOKEN" -ForegroundColor DarkGray
+    Write-Host "    Get token at: https://dashboard.ngrok.com/get-started/your-authtoken" -ForegroundColor DarkGray
+}
+
 # ── WSL2 memory (.wslconfig) ─────────────────────────────────────────────────
 $wslConfig = "$env:USERPROFILE\.wslconfig"
 if (Test-Path $wslConfig) {
@@ -100,7 +139,7 @@ swap=2GB
 # ── Summary ───────────────────────────────────────────────────────────────────
 Write-Host ""
 if ($allOk) {
-    Write-Host "=== All requirements satisfied. Ready to build! ===" -ForegroundColor Green
+    Write-Host "=== All requirements satisfied. Ready to develop and build! ===" -ForegroundColor Green
 } else {
     Write-Host "=== Some requirements were installed. Restart your terminal and re-run setup.ps1 ===" -ForegroundColor Yellow
 }

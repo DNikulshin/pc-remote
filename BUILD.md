@@ -6,7 +6,7 @@
 .\setup.ps1
 ```
 
-Скрипт проверяет Node.js, pnpm, Docker Desktop, Inno Setup 6 и `.wslconfig`.
+Скрипт проверяет Git, Node.js, pnpm, Docker Desktop, Inno Setup 6, ngrok и `.wslconfig`.
 Если что-то отсутствует — устанавливает через `winget` автоматически.
 
 ---
