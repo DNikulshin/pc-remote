@@ -209,10 +209,7 @@ export class DevicesService {
     })
 
     // Отправляем обновление агенту через WebSocket
-    this.app.sendCommand(deviceId, {
-      event: WS_EVENTS.SERVER_SCHEDULE_UPDATE,
-      schedule,
-    })
+    this.app.sendEvent(deviceId, WS_EVENTS.SERVER_SCHEDULE_UPDATE, schedule)
 
     return schedule
   }
@@ -224,10 +221,7 @@ export class DevicesService {
     if (!device) throw new DeviceError('Device not found', 404)
 
     // Отправляем бонусное время агенту через WebSocket
-    const delivered = this.app.sendCommand(deviceId, {
-      event: WS_EVENTS.SERVER_BONUS_UPDATE,
-      minutes: input.minutes,
-    })
+    const delivered = this.app.sendEvent(deviceId, WS_EVENTS.SERVER_BONUS_UPDATE, { minutes: input.minutes })
 
     return { minutes: input.minutes, delivered }
   }

@@ -33,8 +33,8 @@ export function startEnforcer() {
   const check = () => {
     const schedule = getSchedule()
 
-    // Если расписание включено и есть активная сессия — считаем время
-    if (schedule?.enabled && schedule.dailyLimit?.enabled && hasActiveSession()) {
+    // Если дневной лимит включён и есть активная сессия — считаем время
+    if (schedule?.dailyLimit?.enabled && hasActiveSession()) {
       incrementUsage(schedule.timezone)
     }
 

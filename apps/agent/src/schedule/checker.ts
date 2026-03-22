@@ -59,11 +59,11 @@ export type LockReason = 'downtime' | 'allowed_hours' | 'daily_limit' | null
 export function getLockReason(): LockReason {
   const schedule = getSchedule()
 
-  if (!schedule || !schedule.enabled) return null
+  if (!schedule) return null
 
   const ctx = getTimeContext(schedule.timezone)
 
-  // 1. Комендантский час — наивысший приоритет
+  // 1. Комендантский час — наивысший приоритет (независимо от schedule.enabled)
   if (schedule.downtime?.enabled) {
     const { start, end } = schedule.downtime
     if (isInRange(ctx.currentMinutes, start, end)) {
@@ -71,14 +71,16 @@ export function getLockReason(): LockReason {
     }
   }
 
-  // 2. Дневной лимит
+  // 2. Дневной лимит (независимо от schedule.enabled)
   if (schedule.dailyLimit?.enabled) {
     if (isDailyLimitReached(schedule.timezone, schedule.dailyLimit, ctx.isWeekend)) {
       return 'daily_limit'
     }
   }
 
-  // 3. Разрешённые часы по дням
+  // 3. Разрешённые часы по дням — только если фича включена (schedule.enabled)
+  if (!schedule.enabled) return null
+
   const daySlots = schedule.days[String(ctx.dayNumber)] as TimeSlot[] | undefined
 
   if (!daySlots || daySlots.length === 0) {

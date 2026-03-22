@@ -14,6 +14,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     io: Server
     sendCommand: (deviceId: string, payload: unknown) => boolean
+    sendEvent: (deviceId: string, event: string, payload: unknown) => boolean
     getDeviceScreenshot: (deviceId: string) => { image: string; capturedAt: string } | null
   }
 }
@@ -188,6 +189,14 @@ const socketPlugin: FastifyPluginAsync = fp(async (app) => {
     if (!room || room.size === 0) return false
 
     agents.to(deviceId).emit(WS_EVENTS.SERVER_COMMAND, payload)
+    return true
+  })
+
+  app.decorate('sendEvent', (deviceId: string, event: string, payload: unknown): boolean => {
+    const room = agents.adapter.rooms.get(deviceId)
+    if (!room || room.size === 0) return false
+
+    agents.to(deviceId).emit(event, payload)
     return true
   })
 
