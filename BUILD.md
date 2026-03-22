@@ -1,5 +1,16 @@
 # Локальная сборка артефактов
 
+## Проверка и установка требований
+
+```powershell
+.\setup.ps1
+```
+
+Скрипт проверяет Node.js, pnpm, Docker Desktop, Inno Setup 6 и `.wslconfig`.
+Если что-то отсутствует — устанавливает через `winget` автоматически.
+
+---
+
 ## APK (Android)
 
 **Требования:** Docker Desktop запущен, EXPO_TOKEN готов.
