@@ -17,7 +17,7 @@ jest.mock('../api/client', () => {
   return { api: mockApi, API_URL: 'http://localhost:3000', DEFAULT_API_URL: 'http://localhost:3000' }
 })
 
-import type { ActiveUser } from '../store/devices'
+import type { ActiveUser, DiskInfo } from '../store/devices'
 
 const mockDevice = {
   id: 'device-uuid-001',
@@ -30,15 +30,12 @@ const mockDevice = {
   activeUsers: [] as ActiveUser[],
   agentVersion: '0.0.1',
   timezone: 'Europe/Moscow',
+  disks: [] as DiskInfo[],
 }
 
 describe('useDevicesStore', () => {
-  let api: ReturnType<typeof jest.fn>
-
   beforeEach(() => {
     __clearStore()
-    // Получаем замоканный api из модуля
-    api = require('../api/client').api
     jest.clearAllMocks()
     // Сбрасываем стор перед каждым тестом
     jest.resetModules()
@@ -112,6 +109,62 @@ describe('useDevicesStore', () => {
 
       await useDevicesStore.getState().deleteDevice('device-uuid-001')
       expect(useDevicesStore.getState().devices).toHaveLength(0)
+    })
+  })
+
+  describe('fetchScreenshot', () => {
+    it('возвращает данные скриншота при успешном ответе', async () => {
+      const { api: mockApi } = require('../api/client')
+      const screenshot = { image: 'base64data==', capturedAt: '2026-03-22T10:00:00.000Z' }
+      mockApi.get.mockResolvedValueOnce({ data: screenshot })
+
+      const { useDevicesStore } = require('../store/devices')
+      const result = await useDevicesStore.getState().fetchScreenshot('device-uuid-001')
+
+      expect(result).toEqual(screenshot)
+      expect(mockApi.get).toHaveBeenCalledWith('/devices/device-uuid-001/screenshot')
+    })
+
+    it('возвращает null при ошибке (404 — скриншот ещё не готов)', async () => {
+      const { api: mockApi } = require('../api/client')
+      mockApi.get.mockRejectedValueOnce(new Error('Request failed with status code 404'))
+
+      const { useDevicesStore } = require('../store/devices')
+      const result = await useDevicesStore.getState().fetchScreenshot('device-uuid-001')
+
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('DiskInfo структура в Device', () => {
+    it('device.disks корректно принимает DiskInfo[]', async () => {
+      const disks: DiskInfo[] = [
+        { mount: 'C:', total: 500 * 1024 ** 3, free: 200 * 1024 ** 3, used: 300 * 1024 ** 3 },
+        { mount: 'D:', total: 1024 ** 4, free: 800 * 1024 ** 3, used: 224 * 1024 ** 3 },
+      ]
+      const { api: mockApi } = require('../api/client')
+      mockApi.get.mockResolvedValueOnce({
+        data: [{ ...mockDevice, disks }],
+      })
+
+      const { useDevicesStore } = require('../store/devices')
+      await useDevicesStore.getState().fetchDevices()
+
+      const [device] = useDevicesStore.getState().devices
+      expect(device.disks).toHaveLength(2)
+      expect(device.disks[0]).toMatchObject({ mount: 'C:', total: expect.any(Number) })
+      expect(device.disks[1].mount).toBe('D:')
+    })
+
+    it('device.disks по умолчанию пустой массив', async () => {
+      const { api: mockApi } = require('../api/client')
+      mockApi.get.mockResolvedValueOnce({ data: [mockDevice] })
+
+      const { useDevicesStore } = require('../store/devices')
+      await useDevicesStore.getState().fetchDevices()
+
+      const [device] = useDevicesStore.getState().devices
+      expect(device.disks).toEqual([])
     })
   })
 

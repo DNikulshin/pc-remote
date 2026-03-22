@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import { api, BASE, registerUser } from './helpers.js'
 import { randomUUID } from 'crypto'
 import { io as socketClient } from 'socket.io-client'
@@ -157,6 +157,127 @@ describe('Devices API', () => {
       })
       expect(status).toBe(200)
       expect(Array.isArray(body)).toBe(true)
+    })
+  })
+
+  // ─── POST /api/devices/:id/commands — новые типы Этап 5 ──────────────────
+
+  describe('POST /api/devices/:id/commands — новые типы', () => {
+    it.each(['VOLUME_UP', 'VOLUME_DOWN', 'VOLUME_MUTE', 'SCREENSHOT'])(
+      '202 — команда %s принята',
+      async (type) => {
+        const { status, body } = await api(`/api/devices/${deviceId}/commands`, {
+          method: 'POST',
+          token: accessToken,
+          body: JSON.stringify({ type }),
+        })
+        expect(status).toBe(202)
+        const b = body as { command: { type: string } }
+        expect(b.command.type).toBe(type)
+      }
+    )
+  })
+
+  // ─── PUT /api/devices/:id/schedule ────────────────────────────────────────
+
+  describe('PUT /api/devices/:id/schedule', () => {
+    it('200 — сохраняет расписание с downtime и dailyLimit', async () => {
+      const schedule = {
+        timezone: 'Europe/Moscow',
+        enabled: true,
+        days: { '1': [{ start: '09:00', end: '22:00' }] },
+        downtime: { enabled: true, start: '23:00', end: '07:00' },
+        dailyLimit: { enabled: true, minutesWeekday: 120, minutesWeekend: 240 },
+      }
+      const { status, body } = await api(`/api/devices/${deviceId}/schedule`, {
+        method: 'PUT',
+        token: accessToken,
+        body: JSON.stringify(schedule),
+      })
+      expect(status).toBe(200)
+      const b = body as Record<string, unknown>
+      expect(b['enabled']).toBe(true)
+      expect(b['downtime']).toMatchObject({ enabled: true, start: '23:00', end: '07:00' })
+      expect(b['dailyLimit']).toMatchObject({ enabled: true, minutesWeekday: 120 })
+    })
+
+    it('400 — неверный формат времени (не HH:MM)', async () => {
+      const { status } = await api(`/api/devices/${deviceId}/schedule`, {
+        method: 'PUT',
+        token: accessToken,
+        body: JSON.stringify({
+          timezone: 'UTC',
+          enabled: true,
+          days: {},
+          downtime: { enabled: true, start: '9:00', end: '07:00' },
+        }),
+      })
+      expect(status).toBe(400)
+    })
+
+    it('401 — без токена', async () => {
+      const { status } = await api(`/api/devices/${deviceId}/schedule`, {
+        method: 'PUT',
+        body: JSON.stringify({ timezone: 'UTC', enabled: false, days: {} }),
+      })
+      expect(status).toBe(401)
+    })
+  })
+
+  // ─── POST /api/devices/:id/schedule/bonus ─────────────────────────────────
+
+  describe('POST /api/devices/:id/schedule/bonus', () => {
+    it('200 — добавляет бонусное время', async () => {
+      const { status, body } = await api(`/api/devices/${deviceId}/schedule/bonus`, {
+        method: 'POST',
+        token: accessToken,
+        body: JSON.stringify({ minutes: 30 }),
+      })
+      expect(status).toBe(200)
+      const b = body as { minutes: number; delivered: boolean }
+      expect(b.minutes).toBe(30)
+      expect(typeof b.delivered).toBe('boolean')
+    })
+
+    it('400 — minutes вне диапазона (0)', async () => {
+      const { status } = await api(`/api/devices/${deviceId}/schedule/bonus`, {
+        method: 'POST',
+        token: accessToken,
+        body: JSON.stringify({ minutes: 0 }),
+      })
+      expect(status).toBe(400)
+    })
+
+    it('400 — minutes вне диапазона (>120)', async () => {
+      const { status } = await api(`/api/devices/${deviceId}/schedule/bonus`, {
+        method: 'POST',
+        token: accessToken,
+        body: JSON.stringify({ minutes: 121 }),
+      })
+      expect(status).toBe(400)
+    })
+  })
+
+  // ─── GET /api/devices/:id/screenshot ──────────────────────────────────────
+
+  describe('GET /api/devices/:id/screenshot', () => {
+    it('404 — скриншот ещё не получен (агент не подключён)', async () => {
+      const { status } = await api(`/api/devices/${deviceId}/screenshot`, {
+        token: accessToken,
+      })
+      expect(status).toBe(404)
+    })
+
+    it('404 — чужое устройство', async () => {
+      const { status } = await api(`/api/devices/${randomUUID()}/screenshot`, {
+        token: accessToken,
+      })
+      expect(status).toBe(404)
+    })
+
+    it('401 — без токена', async () => {
+      const { status } = await api(`/api/devices/${deviceId}/screenshot`)
+      expect(status).toBe(401)
     })
   })
 

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CommandTypeSchema } from '@pc-remote/shared'
 
 export const BindDeviceSchema = z.object({
   deviceId: z.string().uuid(),
@@ -8,7 +9,7 @@ export const BindDeviceSchema = z.object({
 })
 
 export const SendCommandSchema = z.object({
-  type: z.enum(['SHUTDOWN', 'REBOOT', 'LOCK', 'SLEEP']),
+  type: CommandTypeSchema,
   delaySeconds: z.number().int().min(0).max(3600).default(0),
   message: z.string().max(200).optional(),
 })
