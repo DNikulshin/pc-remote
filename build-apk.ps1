@@ -20,10 +20,10 @@ Write-Host "`n=== Building APK ===" -ForegroundColor Cyan
 docker run --rm `
     -e EXPO_TOKEN=$ExpoToken `
     -e GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false" `
-    -v "${MobileDir}:/app" `
-    -w /app `
+    -v "${Root}:/repo" `
+    -w /repo/apps/mobile `
     $ImageName `
-    bash -c "npm install && eas build --platform android --profile preview --non-interactive --local --output /app/build/app.apk"
+    bash -c "eas build --platform android --profile preview --non-interactive --local --output /repo/apps/mobile/build/app.apk"
 
 if ($LASTEXITCODE -ne 0) { Write-Error "APK build failed"; exit 1 }
 

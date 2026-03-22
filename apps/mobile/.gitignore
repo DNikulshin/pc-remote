@@ -42,3 +42,7 @@ yarn-error.*
 
 # APK build output
 /build
+
+# Test reports (generated artifacts)
+TEST_REPORT.*
+test-report.json
