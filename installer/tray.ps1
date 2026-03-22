@@ -37,12 +37,7 @@ $s = @{
 
 function Make-Icon {
     param([int]$R, [int]$G, [int]$B)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($R, $G, $B))
-    $g.FillEllipse($brush, 1, 1, 14, 14)
-    $g.Dispose(); $brush.Dispose()
+    $bmp = New-Object System.Drawing.Bitmap(16, 16, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
     $bmp.Dispose()
     return $icon
@@ -196,7 +191,20 @@ $timer.Add_Tick({
 
         if ($st.pendingLock) {
             try { Invoke-RestMethod -Uri "$ServerUrl/ack-lock" -Method POST -Headers $th -TimeoutSec 2 | Out-Null } catch {}
-            rundll32.exe user32.dll,LockWorkStation
+            $msg = if ($st.pendingLockMessage) { $st.pendingLockMessage } else { 'Access restricted' }
+            $tray.ShowBalloonTip(4000, 'PC Remote', $msg, [System.Windows.Forms.ToolTipIcon]::Warning)
+            Start-Sleep -Seconds 4
+            if ($st.pendingLogoff) {
+                shutdown /l /f
+            } else {
+                rundll32.exe user32.dll,LockWorkStation
+            }
+        }
+
+        # Уведомление об ограничении времени
+        if ($st.pendingNotification) {
+            try { Invoke-RestMethod -Uri "$ServerUrl/ack-notification" -Method POST -Headers $th -TimeoutSec 2 | Out-Null } catch {}
+            $tray.ShowBalloonTip(5000, 'PC Remote', $st.pendingNotification, [System.Windows.Forms.ToolTipIcon]::Warning)
         }
 
         # Управление громкостью — сервис в session 0 не имеет доступа к аудио сессии пользователя

@@ -7,18 +7,23 @@ import QRCode from 'qrcode'
 const PORT = 3535
 let isOnline = false
 let pendingLock = false
+let pendingLockMessage: string | null = null
+let pendingLogoff = false
 type VolumeAction = 'UP' | 'DOWN' | 'MUTE'
 let pendingVolume: VolumeAction | null = null
 let pendingScreenshot = false
 let screenshotResultCb: ((base64: string) => void) | null = null
+let pendingNotification: string | null = null
 
 export function setOnlineStatus(online: boolean) {
   isOnline = online
 }
 
 // Запрашивает блокировку через трей (сервис в session 0 не может вызвать LockWorkStation напрямую)
-export function setPendingLock() {
+export function setPendingLock(message?: string, logoff = false) {
   pendingLock = true
+  pendingLockMessage = message ?? null
+  pendingLogoff = logoff
 }
 
 export function setPendingVolume(action: VolumeAction) {
@@ -31,6 +36,10 @@ export function setPendingScreenshot() {
 
 export function onScreenshotResult(cb: (base64: string) => void) {
   screenshotResultCb = cb
+}
+
+export function setPendingNotification(message: string) {
+  pendingNotification = message
 }
 
 function checkLocalToken(req: http.IncomingMessage): boolean {
@@ -60,14 +69,17 @@ export function startLocalServer() {
 
     // GET /status
     if (req.method === 'GET' && req.url === '/status') {
-      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({
         online: isOnline,
         deviceId: config.deviceId,
         bound: !!state.agentToken,
         pendingLock,
+        pendingLockMessage,
+        pendingLogoff,
         pendingVolume,
         pendingScreenshot,
+        pendingNotification,
       }))
       return
     }
@@ -110,12 +122,12 @@ export function startLocalServer() {
     if (req.url === '/verify-password') {
       const password = body['password'] as string | undefined
       if (!password || !state.passwordHash) {
-        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
         res.end(JSON.stringify({ valid: false }))
         return
       }
       const valid = await bcrypt.compare(password, state.passwordHash)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ valid }))
       return
     }
@@ -129,7 +141,15 @@ export function startLocalServer() {
       if (!password) { res.writeHead(400); res.end(); return }
       const hash = await bcrypt.hash(password, 12)
       savePasswordHash(hash)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ ok: true }))
+      return
+    }
+
+    // POST /ack-notification — трей подтверждает что уведомление показано
+    if (req.url === '/ack-notification') {
+      pendingNotification = null
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true }))
       return
     }
@@ -137,7 +157,9 @@ export function startLocalServer() {
     // POST /ack-lock — трей подтверждает что блокировка выполнена
     if (req.url === '/ack-lock') {
       pendingLock = false
-      res.writeHead(200, { 'Content-Type': 'application/json' })
+      pendingLockMessage = null
+      pendingLogoff = false
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true }))
       return
     }
@@ -145,7 +167,7 @@ export function startLocalServer() {
     // POST /ack-volume — трей подтверждает что команда громкости принята
     if (req.url === '/ack-volume') {
       pendingVolume = null
-      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true }))
       return
     }
@@ -153,7 +175,7 @@ export function startLocalServer() {
     // POST /ack-screenshot — трей подтверждает начало захвата скриншота
     if (req.url === '/ack-screenshot') {
       pendingScreenshot = false
-      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true }))
       return
     }
@@ -164,7 +186,7 @@ export function startLocalServer() {
       if (image && screenshotResultCb) {
         screenshotResultCb(image)
       }
-      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true }))
       return
     }
@@ -176,7 +198,7 @@ export function startLocalServer() {
       const valid = await bcrypt.compare(password, state.passwordHash)
       if (!valid) { res.writeHead(403); res.end(); return }
       resetAgentConfig()
-      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true }))
       setTimeout(() => process.exit(0), 500)
       return
