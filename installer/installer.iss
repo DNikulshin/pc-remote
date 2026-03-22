@@ -58,9 +58,11 @@ Filename: "{app}\agent-svc.exe"; Parameters: "install"; \
 Filename: "{app}\agent-svc.exe"; Parameters: "start"; \
   Flags: runhidden waituntilterminated
 
-; Запрещаем остановку службы обычным пользователям (ACL)
+; Права на службу: только SYSTEM имеет полный контроль.
+; Администраторы могут только смотреть статус — остановить/изменить/удалить нельзя.
+; Обычные пользователи (AU) — только чтение статуса.
 Filename: "sc.exe"; \
-  Parameters: "sdset {#MyServiceName} D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;AU)"; \
+  Parameters: "sdset {#MyServiceName} D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCLCLOCRRC;;;BA)(A;;CCLCLOCRRC;;;AU)"; \
   Flags: runhidden waituntilterminated
 
 ; Запускаем трей сразу после установки
@@ -173,7 +175,7 @@ begin
   ServerUrl := ServerUrlPage.Values[0];
   ConfigPath := ExpandConstant('{app}\agent-svc.xml');
 
-  SetArrayLength(Lines, 13);
+  SetArrayLength(Lines, 17);
   Lines[0]  := '<?xml version="1.0" encoding="UTF-8"?>';
   Lines[1]  := '<service>';
   Lines[2]  := '  <id>{#MyServiceName}</id>';
@@ -184,9 +186,13 @@ begin
   Lines[7]  := '  <env name="NODE_ENV" value="production"/>';
   Lines[8]  := '  <env name="LOG_LEVEL" value="info"/>';
   Lines[9]  := '  <startmode>Automatic</startmode>';
-  Lines[10] := '  <log mode="none"/>';
-  Lines[11] := '  <onfailure action="restart" delay="10 sec"/>';
-  Lines[12] := '</service>';
+  Lines[10] := '  <serviceaccount>';
+  Lines[11] := '    <username>LocalSystem</username>';
+  Lines[12] := '  </serviceaccount>';
+  Lines[13] := '  <stoptimeout>15 sec</stoptimeout>';
+  Lines[14] := '  <log mode="none"/>';
+  Lines[15] := '  <onfailure action="restart" delay="10 sec"/>';
+  Lines[16] := '</service>';
 
   SaveStringsToFile(ConfigPath, Lines, False);
 end;
