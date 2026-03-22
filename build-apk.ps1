@@ -3,7 +3,7 @@ param(
 )
 
 if (-not $ExpoToken) {
-    Write-Error "Укажи EXPO_TOKEN: .\build-apk.ps1 -ExpoToken 'твой_токен'"
+    Write-Error "EXPO_TOKEN required: .\build-apk.ps1 -ExpoToken 'your_token'"
     exit 1
 }
 
@@ -11,16 +11,11 @@ $Root      = $PSScriptRoot
 $MobileDir = "$Root\apps\mobile"
 $ImageName = "pc-remote-apk-builder"
 
-Write-Host "=== Сборка Docker-образа ===" -ForegroundColor Cyan
+Write-Host "=== Building Docker image ===" -ForegroundColor Cyan
 docker build -f "$Root\Dockerfile.apk" -t $ImageName "$Root"
-if ($LASTEXITCODE -ne 0) { Write-Error "Ошибка сборки образа"; exit 1 }
+if ($LASTEXITCODE -ne 0) { Write-Error "Docker build failed"; exit 1 }
 
-Write-Host "`n=== Сборка APK ===" -ForegroundColor Cyan
-
-# Путь в формате Docker (слэши)
-$MobileDirDocker = $MobileDir -replace '\\', '/'
-# Для WSL/Docker Desktop на Windows — конвертируем путь
-$MobileDirDocker = $MobileDirDocker -replace '^([A-Za-z]):', { "//$($args[0].Value.ToLower())" }
+Write-Host "`n=== Building APK ===" -ForegroundColor Cyan
 
 docker run --rm `
     -e EXPO_TOKEN=$ExpoToken `
@@ -30,7 +25,7 @@ docker run --rm `
     $ImageName `
     bash -c "npm install && eas build --platform android --profile preview --non-interactive --local --output /app/build/app.apk"
 
-if ($LASTEXITCODE -ne 0) { Write-Error "Ошибка сборки APK"; exit 1 }
+if ($LASTEXITCODE -ne 0) { Write-Error "APK build failed"; exit 1 }
 
-Write-Host "`n=== Готово ===" -ForegroundColor Green
+Write-Host "`n=== Done ===" -ForegroundColor Green
 Write-Host "APK: $MobileDir\build\app.apk"
