@@ -3,6 +3,9 @@ $agentDst = "C:\Program Files\PC Remote Agent\agent.exe"
 $traySrc  = "C:\Users\dmn\Desktop\DEV\pc-remote\installer\tray.ps1"
 $trayDst  = "C:\Program Files\PC Remote Agent\tray.ps1"
 
+Write-Host "Resetting service permissions for admin access..."
+sc.exe sdset PCRemoteAgent "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCLCSWRPWPDTLOCRRC;;;BA)(A;;CCLCLOCRRC;;;AU)" 2>$null
+
 Write-Host "Killing agent.exe and tray processes..."
 taskkill /F /IM agent.exe /T 2>$null
 Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'powershell.exe' -and $_.CommandLine -like '*tray.ps1*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }

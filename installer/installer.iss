@@ -31,11 +31,12 @@ Source: "winsw\winsw.exe"; DestDir: "{app}"; DestName: "agent-svc.exe"; \
   Flags: ignoreversion; AfterInstall: CreateWinSWConfig
 Source: "..\apps\agent\dist-win\agent.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "tray.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "tray-launcher.vbs"; DestDir: "{app}"; Flags: ignoreversion
+Source: "set-password.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Запустить трей PC Remote"; \
-  Filename: "powershell.exe"; \
-  Parameters: "-WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tray.ps1"""; \
+  Filename: "{app}\tray-launcher.vbs"; \
   IconFilename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 
@@ -43,31 +44,30 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 ; Автозапуск трея при входе пользователя
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
   ValueType: string; ValueName: "PC Remote Tray"; \
-  ValueData: "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tray.ps1"""; \
+  ValueData: "wscript.exe ""{app}\tray-launcher.vbs"""; \
   Flags: uninsdeletevalue
 
 [Run]
-; Устанавливаем пароль ДО запуска сервиса — чтобы сервис стартовал с уже готовым хешем
-Filename: "{app}\{#MyAppExeName}"; \
-  Parameters: "--set-password ""{code:GetTrayPassword}"""; \
-  Flags: runhidden waituntilterminated
-
 ; Регистрируем и запускаем сервис
 Filename: "{app}\agent-svc.exe"; Parameters: "install"; \
   Flags: runhidden waituntilterminated
 Filename: "{app}\agent-svc.exe"; Parameters: "start"; \
   Flags: runhidden waituntilterminated
 
-; Права на службу: только SYSTEM имеет полный контроль.
-; Администраторы могут только смотреть статус — остановить/изменить/удалить нельзя.
+; Устанавливаем пароль через HTTP после старта сервиса (надёжнее чем --set-password)
+Filename: "powershell.exe"; \
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\set-password.ps1"" -Password ""{code:GetTrayPassword}"""; \
+  Flags: runhidden waituntilterminated
+
+; Права на службу: SYSTEM и администраторы имеют полный контроль (для корректной переустановки).
 ; Обычные пользователи (AU) — только чтение статуса.
 Filename: "sc.exe"; \
-  Parameters: "sdset {#MyServiceName} D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCLCLOCRRC;;;BA)(A;;CCLCLOCRRC;;;AU)"; \
+  Parameters: "sdset {#MyServiceName} D:(A;;CCLCSWRPWPDTLOCRRCSDWDWO;;;SY)(A;;CCLCSWRPWPDTLOCRRCSDWDWO;;;BA)(A;;CCLCLOCRRC;;;AU)"; \
   Flags: runhidden waituntilterminated
 
 ; Запускаем трей сразу после установки
-Filename: "powershell.exe"; \
-  Parameters: "-WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\tray.ps1"""; \
+Filename: "wscript.exe"; \
+  Parameters: """{app}\tray-launcher.vbs"""; \
   Description: "Запустить системный трей PC Remote"; \
   Flags: runhidden nowait postinstall
 
@@ -126,20 +126,22 @@ begin
   Exec('taskkill.exe', '/F /IM {#MyAppExeName}',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
-  // Останавливаем сервис через sc.exe (не требует наличия agent-svc.exe)
+  // Останавливаем и удаляем сервис
   if ServiceExists then begin
     Exec('sc.exe', 'stop {#MyServiceName}',
       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    // Даём сервису время завершиться
     Sleep(2000);
-    // Удаляем через WinSW если файл существует
-    if FileExists(ExpandConstant('{app}\agent-svc.exe')) then begin
+    // Пробуем удалить через WinSW
+    if FileExists(ExpandConstant('{app}\agent-svc.exe')) then
       Exec(ExpandConstant('{app}\agent-svc.exe'), 'uninstall',
         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    end else begin
-      Exec('sc.exe', 'delete {#MyServiceName}',
-        '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    end;
+    // sc delete как fallback
+    Exec('sc.exe', 'delete {#MyServiceName}',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    // Registry fallback — работает даже если DACL заблокировал sc delete
+    Exec('reg.exe', 'delete "HKLM\SYSTEM\CurrentControlSet\Services\{#MyServiceName}" /f',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(1000);
   end;
 end;
 

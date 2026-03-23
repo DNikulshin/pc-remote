@@ -26,7 +26,7 @@ async function main() {
       console.error('Usage: agent.exe --set-password <password>')
       process.exit(1)
     }
-    const hash = await bcrypt.hash(password, 12)
+    const hash = await bcrypt.hash(password, 10)
     savePasswordHash(hash)
     console.log('Password set successfully.')
     process.exit(0)

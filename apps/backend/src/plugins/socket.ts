@@ -38,6 +38,8 @@ const socketPlugin: FastifyPluginAsync = fp(async (app) => {
     // Агент переподключается при обрыве
     pingTimeout: 20000,
     pingInterval: 10000,
+    // Скриншоты могут весить до 2MB в base64
+    maxHttpBufferSize: 5 * 1024 * 1024,
   })
 
   // Namespace для агентов — изолируем от клиентских соединений

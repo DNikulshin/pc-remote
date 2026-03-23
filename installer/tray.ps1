@@ -92,7 +92,7 @@ function Ask-Password {
     try {
         $body   = ConvertTo-Json @{ password = $pass }
         $result = Invoke-RestMethod -Uri "$ServerUrl/verify-password" `
-                    -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 3
+                    -Method POST -Body $body -ContentType 'application/json' -TimeoutSec 15
         return [bool]$result.valid
     } catch { return $false }
 }
@@ -222,18 +222,28 @@ $timer.Add_Tick({
         if ($st.pendingScreenshot) {
             try {
                 $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-                $bmp = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
-                $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+                # Захват в половину разрешения для экономии трафика
+                $w = [int]($bounds.Width / 2)
+                $h = [int]($bounds.Height / 2)
+                $full = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
+                $gfx  = [System.Drawing.Graphics]::FromImage($full)
                 $gfx.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-                $ms  = New-Object System.IO.MemoryStream
-                $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Jpeg)
-                $b64  = [Convert]::ToBase64String($ms.ToArray())
-                $ms.Dispose(); $bmp.Dispose(); $gfx.Dispose()
-                # Сначала сбрасываем флаг, потом отправляем результат
+                $small = New-Object System.Drawing.Bitmap($w, $h)
+                $gfxS  = [System.Drawing.Graphics]::FromImage($small)
+                $gfxS.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $gfxS.DrawImage($full, 0, 0, $w, $h)
+                # JPEG quality 60
+                $jpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
+                $encParams = New-Object System.Drawing.Imaging.EncoderParameters(1)
+                $encParams.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality, [long]60)
+                $ms = New-Object System.IO.MemoryStream
+                $small.Save($ms, $jpegCodec, $encParams)
+                $b64 = [Convert]::ToBase64String($ms.ToArray())
+                $ms.Dispose(); $full.Dispose(); $gfx.Dispose(); $small.Dispose(); $gfxS.Dispose()
                 Invoke-RestMethod -Uri "$ServerUrl/ack-screenshot" -Method POST -Headers $th -TimeoutSec 2 | Out-Null
-                $body = ConvertTo-Json @{ image = $b64 }
+                $body = ConvertTo-Json @{ image = $b64 } -Compress
                 $thJson = @{ 'X-Local-Token' = $script:localToken; 'Content-Type' = 'application/json' }
-                Invoke-RestMethod -Uri "$ServerUrl/screenshot-result" -Method POST -Body $body -Headers $thJson -TimeoutSec 10 | Out-Null
+                Invoke-RestMethod -Uri "$ServerUrl/screenshot-result" -Method POST -Body $body -Headers $thJson -TimeoutSec 15 | Out-Null
             } catch {}
         }
 

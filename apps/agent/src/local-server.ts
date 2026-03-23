@@ -118,6 +118,18 @@ export function startLocalServer() {
 
     const body = await parseBody(req)
 
+    // POST /setup-password — без токена, только если пароль ещё не задан (первый запуск/установка)
+    if (req.url === '/setup-password') {
+      if (state.passwordHash) { res.writeHead(403); res.end(); return }
+      const password = body['password'] as string | undefined
+      if (!password) { res.writeHead(400); res.end(); return }
+      const hash = await bcrypt.hash(password, 10)
+      savePasswordHash(hash)
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ ok: true }))
+      return
+    }
+
     // POST /verify-password — без токена (трей вызывает его первым для аутентификации)
     if (req.url === '/verify-password') {
       const password = body['password'] as string | undefined
@@ -139,7 +151,7 @@ export function startLocalServer() {
     if (req.url === '/change-password') {
       const password = body['password'] as string | undefined
       if (!password) { res.writeHead(400); res.end(); return }
-      const hash = await bcrypt.hash(password, 12)
+      const hash = await bcrypt.hash(password, 10)
       savePasswordHash(hash)
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true }))
