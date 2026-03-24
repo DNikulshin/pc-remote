@@ -22,6 +22,9 @@ installer/winsw/
 # APK builder
 Dockerfile.apk
 
+# Diagnostic scripts
+check-screenshot.ps1
+
 # Prisma generated
 apps/backend/node_modules/.prisma/
 
