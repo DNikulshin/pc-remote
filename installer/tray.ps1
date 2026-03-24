@@ -87,7 +87,11 @@ function Show-Balloon([string]$Text, [string]$Title = 'PC Remote') {
 
 function Ask-Password {
     Add-Type -AssemblyName Microsoft.VisualBasic
+    # Останавливаем таймер на время диалога — иначе Invoke-RestMethod в Tick
+    # блокирует UI-поток и InputBox "подвисает" на 2 сек каждые 5 сек
+    $timer.Stop()
     $pass = [Microsoft.VisualBasic.Interaction]::InputBox($s.EnterPass, 'PC Remote', '')
+    $timer.Start()
     if (-not $pass) { return $false }
     try {
         $body   = ConvertTo-Json @{ password = $pass }

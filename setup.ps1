@@ -66,13 +66,20 @@ if (Test-Command "docker") {
 }
 
 # ── Inno Setup 6 ─────────────────────────────────────────────────────────────
-$innoPath = "C:\Users\Admin\AppData\Local\Programs\Inno Setup 6\ISCC.exe"
-$innoInPath = Test-Command "ISCC"
+# Ищем ISCC.exe: сначала в PATH, затем в типичных папках установки
+$isccCmd = Get-Command "ISCC" -ErrorAction SilentlyContinue
+$isccExe = if ($isccCmd) { $isccCmd.Source } else { $null }
+if (-not $isccExe) {
+    $candidates = @(
+        "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+        "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+    )
+    $isccExe = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
 
-if ($innoInPath -or (Test-Path $innoPath)) {
-    $exePath = if ($innoInPath) { (Get-Command "ISCC").Source } else { $innoPath }
-    $v = (& $exePath /? 2>&1 | Select-String "Inno Setup" | Select-Object -First 1).ToString().Trim()
-    Write-Status $OK "Inno Setup 6" $exePath
+if ($isccExe) {
+    Write-Status $OK "Inno Setup 6" $isccExe
 } else {
     $allOk = $false
     Write-Status $MISS "Inno Setup 6"

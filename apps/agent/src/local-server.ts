@@ -118,9 +118,8 @@ export function startLocalServer() {
 
     const body = await parseBody(req)
 
-    // POST /setup-password — без токена, только если пароль ещё не задан (первый запуск/установка)
+    // POST /setup-password — без токена, для установщика (первая установка и переустановка)
     if (req.url === '/setup-password') {
-      if (state.passwordHash) { res.writeHead(403); res.end(); return }
       const password = body['password'] as string | undefined
       if (!password) { res.writeHead(400); res.end(); return }
       const hash = await bcrypt.hash(password, 10)
@@ -196,7 +195,10 @@ export function startLocalServer() {
     if (req.url === '/screenshot-result') {
       const image = body['image'] as string | undefined
       if (image && screenshotResultCb) {
+        logger.info(`screenshot-result received imageLen=${image.length} — forwarding to backend`)
         screenshotResultCb(image)
+      } else {
+        logger.warn(`screenshot-result: image=${!!image} cb=${!!screenshotResultCb}`)
       }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ ok: true }))

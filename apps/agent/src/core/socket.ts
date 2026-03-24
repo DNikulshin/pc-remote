@@ -46,12 +46,13 @@ export async function connectToServer(tokenOverride?: string): Promise<void> {
     startHeartbeat()
     sendLocalUsers()
     onScreenshotResult((image) => {
+      logger.info(`Forwarding screenshot to backend imageLen=${image.length}`)
       socket?.emit(WS_EVENTS.AGENT_SCREENSHOT, {
         deviceId: config.deviceId,
         image,
         capturedAt: new Date().toISOString(),
       })
-      logger.debug('Screenshot sent to server')
+      logger.info('Screenshot emitted to backend')
     })
   })
 

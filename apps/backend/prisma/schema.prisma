@@ -54,6 +54,9 @@ model Device {
   activeUsers  Json     @default("[]")
   disks        Json     @default("[]")
 
+  screenshotImage String?   // base64 JPEG
+  screenshotAt    DateTime? // серверное время получения
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

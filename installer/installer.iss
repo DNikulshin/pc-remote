@@ -72,6 +72,11 @@ Filename: "wscript.exe"; \
   Flags: runhidden nowait postinstall
 
 [UninstallRun]
+; 0. Удаляем исключение Windows Defender
+Filename: "powershell.exe"; \
+  Parameters: "-NoProfile -WindowStyle Hidden -Command ""Remove-MpPreference -ExclusionPath '{app}' -ErrorAction SilentlyContinue"""; \
+  Flags: runhidden waituntilterminated
+
 ; 1. Убиваем процесс трея (powershell, запускающий tray.ps1)
 Filename: "powershell.exe"; \
   Parameters: "-NoProfile -WindowStyle Hidden -Command ""Get-CimInstance Win32_Process | Where-Object {{$_.Name -eq 'powershell.exe' -and $_.CommandLine -like '*tray.ps1*'} | ForEach-Object {{Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue}"""; \
@@ -81,7 +86,12 @@ Filename: "powershell.exe"; \
 Filename: "taskkill.exe"; Parameters: "/F /IM {#MyAppExeName}"; \
   Flags: runhidden waituntilterminated
 
-; 3. Останавливаем и удаляем сервис
+; 3. Сбрасываем DACL перед удалением — иначе sc delete/uninstall может упасть из-за старых ограниченных прав
+Filename: "powershell.exe"; \
+  Parameters: "-NoProfile -WindowStyle Hidden -Command ""Remove-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\{#MyServiceName}' -Name Security -Force -ErrorAction SilentlyContinue"""; \
+  Flags: runhidden waituntilterminated
+
+; 4. Останавливаем и удаляем сервис
 Filename: "{app}\agent-svc.exe"; Parameters: "stop"; \
   Flags: runhidden waituntilterminated
 Filename: "{app}\agent-svc.exe"; Parameters: "uninstall"; \
@@ -114,6 +124,7 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
+  I: Integer;
 begin
   Result := '';
 
@@ -126,22 +137,83 @@ begin
   Exec('taskkill.exe', '/F /IM {#MyAppExeName}',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
+  // Добавляем исключение Defender ДО копирования файлов —
+  // иначе AV успевает просканировать и заблокировать agent.exe при копировании
+  Exec('powershell.exe',
+    '-NoProfile -WindowStyle Hidden -Command "Add-MpPreference' +
+    ' -ExclusionPath ''' + ExpandConstant('{app}') + '''' +
+    ' -ErrorAction SilentlyContinue"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
   // Останавливаем и удаляем сервис
   if ServiceExists then begin
     Exec('sc.exe', 'stop {#MyServiceName}',
       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Sleep(2000);
-    // Пробуем удалить через WinSW
+
+    // Сбрасываем DACL: удаляем Security value из реестра — после этого
+    // SCM использует дефолтные права, и sc delete/uninstall сработают
+    Exec('powershell.exe',
+      '-NoProfile -WindowStyle Hidden -Command "Remove-ItemProperty' +
+      ' -Path ''HKLM:\SYSTEM\CurrentControlSet\Services\{#MyServiceName}''' +
+      ' -Name Security -Force -ErrorAction SilentlyContinue"',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+    // WinSW uninstall
     if FileExists(ExpandConstant('{app}\agent-svc.exe')) then
       Exec(ExpandConstant('{app}\agent-svc.exe'), 'uninstall',
         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
     // sc delete как fallback
     Exec('sc.exe', 'delete {#MyServiceName}',
       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    // Registry fallback — работает даже если DACL заблокировал sc delete
-    Exec('reg.exe', 'delete "HKLM\SYSTEM\CurrentControlSet\Services\{#MyServiceName}" /f',
+
+    // WMI delete — работает когда sc delete не справляется
+    Exec('powershell.exe',
+      '-NoProfile -WindowStyle Hidden -Command' +
+      ' "Get-WmiObject Win32_Service | Where-Object Name -eq ''{#MyServiceName}'' | ForEach-Object { $_.Delete() }"',
       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Sleep(1000);
+
+    // Удаляем ключ реестра напрямую
+    Exec('powershell.exe',
+      '-NoProfile -WindowStyle Hidden -Command "Remove-Item' +
+      ' ''HKLM:\SYSTEM\CurrentControlSet\Services\{#MyServiceName}''' +
+      ' -Recurse -Force -ErrorAction SilentlyContinue"',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+    // Ждём пока SCM полностью освободит запись о сервисе (до 5 сек)
+    // sc query возвращает 1060 когда сервис исчез из SCM
+    for I := 0 to 10 do begin
+      Sleep(500);
+      Exec('sc.exe', 'query {#MyServiceName}',
+        '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      if ResultCode <> 0 then break;
+    end;
+
+    // Если сервис всё ещё в SCM — DACL блокирует обычный sc delete.
+    // Запускаем sdset+delete от имени SYSTEM через schtasks (SYSTEM обходит любой DACL)
+    Exec('sc.exe', 'query {#MyServiceName}',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if ResultCode = 0 then begin
+      Exec('schtasks.exe',
+        '/Create /TN "PCRCleanup" /TR ' +
+        '"sc.exe sdset {#MyServiceName} D:(A;;CCLCSWRPWPDTLOCRRCSDWDWO;;;SY)(A;;CCLCSWRPWPDTLOCRRCSDWDWO;;;BA) && ' +
+        'sc.exe stop {#MyServiceName} && sc.exe delete {#MyServiceName}" ' +
+        '/SC ONCE /ST 00:00 /RU SYSTEM /F',
+        '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      Exec('schtasks.exe', '/Run /TN "PCRCleanup"',
+        '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      Sleep(4000);
+      Exec('schtasks.exe', '/Delete /TN "PCRCleanup" /F',
+        '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      // Финальное ожидание
+      for I := 0 to 20 do begin
+        Sleep(500);
+        Exec('sc.exe', 'query {#MyServiceName}',
+          '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        if ResultCode <> 0 then break;
+      end;
+    end;
   end;
 end;
 

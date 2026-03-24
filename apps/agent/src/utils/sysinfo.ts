@@ -25,13 +25,17 @@ export interface SystemInfo {
   disks: DiskInfo[]
 }
 
-// Служебные учётки Windows — исключаем по префиксу/паттерну
+// Служебные учётки Windows — исключаем по точному имени или префиксу
 const SERVICE_ACCOUNT_PREFIXES = ['DWM-', 'UMFD-', 'SYSTEM', 'LOCAL SERVICE', 'NETWORK SERVICE']
+const SERVICE_ACCOUNT_EXACT = new Set([
+  'DefaultAccount', 'WDAGUtilityAccount', 'Guest',
+])
 
 function isServiceAccount(name: string): boolean {
   const upper = name.toUpperCase()
   return (
     name.endsWith('$') ||
+    SERVICE_ACCOUNT_EXACT.has(name) ||
     SERVICE_ACCOUNT_PREFIXES.some((p) => upper.startsWith(p.toUpperCase()))
   )
 }
@@ -170,7 +174,7 @@ export function getLocalUsers(): LocalUser[] {
 
   try {
     const output = execSync(
-      'powershell.exe -NonInteractive -NoProfile -Command "Get-LocalUser | Select-Object Name,Enabled,FullName | ConvertTo-Json -Compress"',
+      'powershell.exe -NonInteractive -NoProfile -Command "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Get-LocalUser | Select-Object Name,Enabled,FullName | ConvertTo-Json -Compress"',
       { encoding: 'utf-8', windowsHide: true }
     )
 

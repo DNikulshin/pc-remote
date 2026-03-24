@@ -137,14 +137,20 @@ const socketPlugin: FastifyPluginAsync = fp(async (app) => {
       app.log.info({ deviceId, commandId, success }, 'Command result received')
     })
 
-    // Скриншот от агента — сохраняем в кэш
+    // Скриншот от агента — сохраняем в кэш и в БД
     socket.on(WS_EVENTS.AGENT_SCREENSHOT, (raw: unknown) => {
       const payload = raw as Record<string, unknown>
       const image = payload['image'] as string | undefined
-      const capturedAt = payload['capturedAt'] as string | undefined
-      if (image && capturedAt) {
-        screenshotCache.set(deviceId, { image, capturedAt })
+      if (image) {
+        // Используем серверное время — не зависим от часов агента
+        const now = new Date()
+        screenshotCache.set(deviceId, { image, capturedAt: now.toISOString() })
         app.log.info({ deviceId }, 'Screenshot cached')
+        // Сохраняем в БД на случай перезапуска инстанса
+        void (app.prisma as PrismaClient).device.update({
+          where: { id: deviceId },
+          data: { screenshotImage: image, screenshotAt: now },
+        })
       }
     })
 
