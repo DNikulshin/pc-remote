@@ -4,7 +4,14 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 Add-Type -TypeDefinition @'
+using System;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Drawing.Drawing2D;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
+
 public class AudioKeys {
     [DllImport("user32.dll")]
     public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
@@ -12,7 +19,54 @@ public class AudioKeys {
     public static void VolumeDown() { keybd_event(0xAE, 0, 0, 0); keybd_event(0xAE, 0, 2, 0); }
     public static void VolumeMute() { keybd_event(0xAD, 0, 0, 0); keybd_event(0xAD, 0, 2, 0); }
 }
-'@
+
+public class ScreenGrab {
+    [DllImport("user32.dll")] static extern IntPtr GetDesktopWindow();
+    [DllImport("user32.dll")] static extern IntPtr GetWindowDC(IntPtr h);
+    [DllImport("user32.dll")] static extern int    ReleaseDC(IntPtr h, IntPtr dc);
+    [DllImport("gdi32.dll")]  static extern IntPtr CreateCompatibleDC(IntPtr dc);
+    [DllImport("gdi32.dll")]  static extern IntPtr CreateCompatibleBitmap(IntPtr dc, int w, int h);
+    [DllImport("gdi32.dll")]  static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
+    [DllImport("gdi32.dll")]  static extern bool   BitBlt(IntPtr dst, int x, int y, int w, int h, IntPtr src, int sx, int sy, int op);
+    [DllImport("gdi32.dll")]  static extern bool   DeleteDC(IntPtr dc);
+    [DllImport("gdi32.dll")]  static extern bool   DeleteObject(IntPtr obj);
+
+    public static string Capture(int quality) {
+        int sw = Screen.PrimaryScreen.Bounds.Width;
+        int sh = Screen.PrimaryScreen.Bounds.Height;
+        int tw = sw / 2, th = sh / 2;
+
+        IntPtr desk  = GetDesktopWindow();
+        IntPtr dc    = GetWindowDC(desk);
+        IntPtr memDc = CreateCompatibleDC(dc);
+        IntPtr hBmp  = CreateCompatibleBitmap(dc, sw, sh);
+        IntPtr old   = SelectObject(memDc, hBmp);
+        BitBlt(memDc, 0, 0, sw, sh, dc, 0, 0, 0x00CC0020); // SRCCOPY
+        SelectObject(memDc, old);
+        DeleteDC(memDc);
+        ReleaseDC(desk, dc);
+
+        Bitmap full = Image.FromHbitmap(hBmp);
+        DeleteObject(hBmp);
+
+        var small = new Bitmap(tw, th);
+        using (var g = Graphics.FromImage(small)) {
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(full, 0, 0, tw, th);
+        }
+        full.Dispose();
+
+        var codec = Array.Find(ImageCodecInfo.GetImageEncoders(), c => c.MimeType == "image/jpeg");
+        var ep    = new EncoderParameters(1);
+        ep.Param[0] = new EncoderParameter(Encoder.Quality, (long)quality);
+        using (var ms = new MemoryStream()) {
+            small.Save(ms, codec, ep);
+            small.Dispose();
+            return Convert.ToBase64String(ms.ToArray());
+        }
+    }
+}
+'@ -ReferencedAssemblies 'System.Windows.Forms', 'System.Drawing'
 
 # -- Строки интерфейса (unicode char codes — независимо от кодировки файла) --
 $s = @{
@@ -225,25 +279,7 @@ $timer.Add_Tick({
         # ACK отправляем только ПОСЛЕ успешного захвата, чтобы не потерять скриншот при сбое
         if ($st.pendingScreenshot) {
             try {
-                $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-                # Захват в половину разрешения для экономии трафика
-                $w = [int]($bounds.Width / 2)
-                $h = [int]($bounds.Height / 2)
-                $full = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
-                $gfx  = [System.Drawing.Graphics]::FromImage($full)
-                $gfx.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-                $small = New-Object System.Drawing.Bitmap($w, $h)
-                $gfxS  = [System.Drawing.Graphics]::FromImage($small)
-                $gfxS.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-                $gfxS.DrawImage($full, 0, 0, $w, $h)
-                # JPEG quality 60
-                $jpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
-                $encParams = New-Object System.Drawing.Imaging.EncoderParameters(1)
-                $encParams.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality, [long]60)
-                $ms = New-Object System.IO.MemoryStream
-                $small.Save($ms, $jpegCodec, $encParams)
-                $b64 = [Convert]::ToBase64String($ms.ToArray())
-                $ms.Dispose(); $full.Dispose(); $gfx.Dispose(); $small.Dispose(); $gfxS.Dispose()
+                $b64 = [ScreenGrab]::Capture(60)
                 Invoke-RestMethod -Uri "$ServerUrl/ack-screenshot" -Method POST -Headers $th -TimeoutSec 2 | Out-Null
                 $body = ConvertTo-Json @{ image = $b64 } -Compress
                 $thJson = @{ 'X-Local-Token' = $script:localToken; 'Content-Type' = 'application/json' }
