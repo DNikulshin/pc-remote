@@ -95,6 +95,13 @@ jobs:
           path: installer/output/pc-remote-agent-setup.exe
           retention-days: 30
 
+      - name: Upload standalone agent exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc-remote-agent-exe
+          path: apps/agent/dist-win/agent.exe
+          retention-days: 30
+
       # Для тега или ручного запуска с release_tag — кладём установщик в релиз.
       # Создаём релиз, если его ещё нет (APK-джоба может завершиться позже).
       - name: Attach installer to GitHub Release
@@ -105,12 +112,14 @@ jobs:
         shell: bash
         run: |
           set -e
-          ASSET="pc-remote-agent-${RELEASE_TAG}-setup.exe"
-          cp installer/output/pc-remote-agent-setup.exe "$ASSET"
+          SETUP="pc-remote-agent-${RELEASE_TAG}-setup.exe"
+          AGENT="pc-remote-agent-${RELEASE_TAG}.exe"
+          cp installer/output/pc-remote-agent-setup.exe "$SETUP"
+          cp apps/agent/dist-win/agent.exe "$AGENT"
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$ASSET" --clobber
+            gh release upload "$RELEASE_TAG" "$SETUP" "$AGENT" --clobber
           else
-            gh release create "$RELEASE_TAG" "$ASSET" \
+            gh release create "$RELEASE_TAG" "$SETUP" "$AGENT" \
               --title "PC Remote $RELEASE_TAG" \
               --generate-notes
           fi

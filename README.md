@@ -49,7 +49,8 @@ docker run -p 3000:3000 \
 Публикация: push в `main` (при изменениях в `apps/backend/**`, `packages/shared/**`,
 `Dockerfile`, lockfile или самом workflow) обновляет тег ветки и `latest`; push тега `v*`
 (например `v1.2.0`) публикует образ с тегами `:1.2.0`, `:1.2`, `:sha-xxxxxxx` (тег `:latest` обновляется
-только из `main`), а также создаёт **GitHub Release** с собранным APK (`pc-remote-v1.2.0.apk`).
+только из `main`), а также создаёт **GitHub Release** с APK (`pc-remote-v1.2.0.apk`), Windows-установщиком
+(`pc-remote-agent-v1.2.0-setup.exe`) и отдельным бинарником агента (`pc-remote-agent-v1.2.0.exe`).
 
 > ⚠️ Контейнер при старте выполняет `prisma db push --accept-data-loss` — схема БД
 > приводится к текущей без миграций, возможна потеря данных. Для продакшена с миграциями
