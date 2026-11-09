@@ -8,5 +8,7 @@ export default defineConfig({
     // Тесты гоняем последовательно — они работают с реальной БД
     pool: 'forks',
     singleFork: true,
+    // Только исходники: dist/__tests__ не должен подхватываться
+    include: ['src/**/*.test.ts'],
   },
 })

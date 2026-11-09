@@ -1,7 +1,7 @@
 import fp from 'fastify-plugin'
 import { FastifyPluginAsync } from 'fastify'
 import { Server, Socket } from 'socket.io'
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import crypto from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import {
@@ -47,6 +47,19 @@ interface ScreenshotEntry {
 
 // Скриншот считаем актуальным 10 минут — старше отдаём из БД либо 404
 const SCREENSHOT_CACHE_TTL_MS = 10 * 60 * 1000
+
+// Код Prisma для конфликта сериализации (read/write dependencies among transactions)
+const SERIALIZATION_CONFLICT_CODE = 'P2034'
+
+// Задержки между попытками повторной синхронизации local users:
+// 3 попытки всего (первая + 2 повтора)
+const SYNC_RETRY_DELAYS_MS = [25, 50] as const
+
+// Повторяем только сериализационные конфликты: остальные ошибки — как раньше
+const isSerializationConflict = (err: unknown): boolean =>
+  typeof err === 'object' &&
+  err !== null &&
+  (err as { code?: unknown }).code === SERIALIZATION_CONFLICT_CODE
 
 const screenshotCache = new Map<string, ScreenshotEntry>()
 
@@ -343,36 +356,59 @@ const socketPlugin: FastifyPluginAsync = fp(async (app) => {
           // Проверка поколения и замена пользователей — ОДНА serializable-транзакция:
           // иначе старый сокет может пройти проверку, а после DELETE + re-init
           // удалить/заменить DeviceUser уже нового устройства
-          await prisma.$transaction(
-            async (tx) => {
-              const current = await tx.device.findFirst({
-                where: { id: deviceId, createdAt: generationDate },
-                select: { id: true },
-              })
-              if (!current) {
-                app.log.warn(
-                  { deviceId, generation },
-                  'Local users from stale device generation ignored'
-                )
-                return
-              }
-
-              await tx.deviceUser.deleteMany({ where: { deviceId } })
-              if (users.length > 0) {
-                await tx.deviceUser.createMany({
-                  data: users.map((u) => ({
-                    deviceId,
-                    name: u.name,
-                    fullName: u.fullName,
-                    enabled: u.enabled,
-                  })),
+          const syncUsers = async (): Promise<void> => {
+            await prisma.$transaction(
+              async (tx: Prisma.TransactionClient) => {
+                const current = await tx.device.findFirst({
+                  where: { id: deviceId, createdAt: generationDate },
+                  select: { id: true },
                 })
-              }
+                if (!current) {
+                  app.log.warn(
+                    { deviceId, generation },
+                    'Local users from stale device generation ignored'
+                  )
+                  return
+                }
 
-              ok = true
-            },
-            { isolationLevel: 'Serializable' }
-          )
+                await tx.deviceUser.deleteMany({ where: { deviceId } })
+                if (users.length > 0) {
+                  await tx.deviceUser.createMany({
+                    data: users.map((u) => ({
+                      deviceId,
+                      name: u.name,
+                      fullName: u.fullName,
+                      enabled: u.enabled,
+                    })),
+                  })
+                }
+
+                ok = true
+              },
+              { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+            )
+          }
+
+          // Serializable-транзакции могут конфликтовать между собой (P2034),
+          // когда параллельно синхронизируются другие устройства. Конфликт не
+          // означает потерю данных — транзакция просто не применилась, поэтому
+          // повторяем её с небольшой задержкой (до 3 попыток всего)
+          for (let attempt = 0; ; attempt++) {
+            try {
+              ok = false
+              await syncUsers()
+              break
+            } catch (err) {
+              const delay = SYNC_RETRY_DELAYS_MS[attempt]
+              if (!isSerializationConflict(err) || delay === undefined) throw err
+
+              app.log.warn(
+                { err, deviceId, attempt: attempt + 1 },
+                'Local users sync hit serialization conflict, retrying'
+              )
+              await new Promise((resolve) => setTimeout(resolve, delay))
+            }
+          }
 
           // Логируем только после успешного COMMIT — ok выставляется в транзакции
           if (ok) {

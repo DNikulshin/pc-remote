@@ -7,7 +7,7 @@
     "dev": "tsx watch src/app.ts",
     "build": "prisma generate && tsc",
     "start": "prisma db push --accept-data-loss && node dist/app.js",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.test.json",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
