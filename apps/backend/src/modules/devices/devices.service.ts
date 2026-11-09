@@ -3,6 +3,7 @@ import { FastifyInstance } from 'fastify'
 import crypto from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import { WS_EVENTS } from '@pc-remote/shared'
+import { roomFor } from '../../plugins/socket.js'
 import type {
   BindDeviceInput,
   SendCommandInput,
@@ -159,8 +160,8 @@ export class DevicesService {
       },
     })
 
-    // Пытаемся отправить через WebSocket прямо сейчас
-    const delivered = this.app.sendCommand(deviceId, {
+    // Пытаемся отправить через WebSocket прямо сейчас (комната поколения)
+    const delivered = await this.app.sendCommand(deviceId, {
       commandId: command.id,
       type: input.type,
       delaySeconds: input.delaySeconds,
@@ -209,7 +210,7 @@ export class DevicesService {
     })
 
     // Отправляем обновление агенту через WebSocket
-    this.app.sendEvent(deviceId, WS_EVENTS.SERVER_SCHEDULE_UPDATE, schedule)
+    await this.app.sendEvent(deviceId, WS_EVENTS.SERVER_SCHEDULE_UPDATE, schedule)
 
     return schedule
   }
@@ -221,7 +222,9 @@ export class DevicesService {
     if (!device) throw new DeviceError('Device not found', 404)
 
     // Отправляем бонусное время агенту через WebSocket
-    const delivered = this.app.sendEvent(deviceId, WS_EVENTS.SERVER_BONUS_UPDATE, { minutes: input.minutes })
+    const delivered = await this.app.sendEvent(deviceId, WS_EVENTS.SERVER_BONUS_UPDATE, {
+      minutes: input.minutes,
+    })
 
     return { minutes: input.minutes, delivered }
   }
@@ -232,8 +235,17 @@ export class DevicesService {
     })
     if (!device) throw new DeviceError('Device not found', 404)
 
-    // Уведомляем агент до удаления — пока socket ещё аутентифицирован
-    this.app.io.of('/agents').to(deviceId).emit(WS_EVENTS.SERVER_UNBIND)
+    // Сначала выбрасываем кэш скриншота — иначе после удаления устройства
+    // старый кадр может быть отдан повторно (другому пользователю)
+    this.app.clearDeviceScreenshot(deviceId)
+
+    // Уведомляем агент до удаления — только сокет своего поколения. Сокеты
+    // принудительно не отключаем: generation-guard делает их инертными, а emit
+    // не должен гоняться с disconnect
+    this.app.io
+      .of('/agents')
+      .to(roomFor(deviceId, device.createdAt.toISOString()))
+      .emit(WS_EVENTS.SERVER_UNBIND)
 
     await this.prisma.device.delete({ where: { id: deviceId } })
   }

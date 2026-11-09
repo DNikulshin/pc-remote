@@ -1,4 +1,5 @@
 import { FastifyPluginAsync } from 'fastify'
+import bcrypt from 'bcryptjs'
 import { DevicesService, DeviceError } from './devices.service.js'
 import {
   BindDeviceSchema,
@@ -12,15 +13,30 @@ const devicesPublicRoutes: FastifyPluginAsync = async (app) => {
   const service = new DevicesService(app.prisma, app)
 
   app.get<{ Params: { id: string } }>('/:id/token', async (request, reply) => {
+    // Токен агента отдаём только тому, кто знает secret устройства (агент хранит его до привязки)
+    const deviceSecret = request.headers['x-device-secret']
+    if (typeof deviceSecret !== 'string' || deviceSecret.length === 0) {
+      return reply.status(401).send({ error: 'x-device-secret header required' })
+    }
+
     const device = await app.prisma.device.findUnique({
       where: { id: request.params.id },
-      select: { agentToken: true },
+      select: { agentToken: true, secret: true },
     })
-  
+
     if (!device) {
       return reply.status(404).send({ error: 'Device not found' })
     }
-  
+
+    const secretValid = await bcrypt.compare(deviceSecret, device.secret)
+    if (!secretValid) {
+      return reply.status(403).send({ error: 'Invalid secret' })
+    }
+
+    // Поллинг идемпотентен: secret гасится не здесь, а при успешной
+    // WS-аутентификации агента (plugins/socket.ts). Потеря ответа или гонка
+    // двух поллингов не ломают привязку — повторный запрос снова вернёт токен.
+
     // Возвращаем токен только если устройство привязано
     return reply.send({ agentToken: device.agentToken ?? null })
   })
@@ -175,25 +191,36 @@ const devicesPrivateRoutes: FastifyPluginAsync = async (app) => {
   )
 
   app.get<{ Params: { id: string } }>('/:id/screenshot', async (request, reply) => {
-    // Сначала быстрый in-memory кэш
-    const cached = app.getDeviceScreenshot(request.params.id)
-    if (cached) {
-      return reply.send(cached)
-    }
-    // Фолбэк: читаем из БД (переживает перезапуск Render)
+    // Сначала проверяем владельца легким select (без base64) — только потом кэш
     const device = await app.prisma.device.findFirst({
       where: { id: request.params.id, userId: request.user.userId },
-      select: { screenshotImage: true, screenshotAt: true },
+      select: { id: true, createdAt: true },
     })
     if (!device) {
       return reply.status(404).send({ error: 'Device not found' })
     }
-    if (!device.screenshotImage || !device.screenshotAt) {
+
+    // Поколение устройства: после DELETE + повторной регистрации того же deviceId
+    // createdAt другой, поэтому чужой кадр из кэша (в т.ч. другого инстанса) не отдаём
+    const generation = device.createdAt.toISOString()
+
+    // Быстрый in-memory кэш
+    const cached = app.getDeviceScreenshot(device.id, generation)
+    if (cached) {
+      return reply.send(cached)
+    }
+
+    // Фолбэк: читаем крупные поля из БД только при промахе кэша
+    const stored = await app.prisma.device.findFirst({
+      where: { id: device.id, userId: request.user.userId },
+      select: { screenshotImage: true, screenshotAt: true },
+    })
+    if (!stored?.screenshotImage || !stored.screenshotAt) {
       return reply.status(404).send({ error: 'No screenshot available' })
     }
     return reply.send({
-      image: device.screenshotImage,
-      capturedAt: device.screenshotAt.toISOString(),
+      image: stored.screenshotImage,
+      capturedAt: stored.screenshotAt.toISOString(),
     })
   })
 
