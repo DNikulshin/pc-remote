@@ -66,15 +66,31 @@ docker run -p 3000:3000 \
 Порядок:
 
 ```bash
+# 0. (рекомендуется) Render → сервис pc-remote-backend → Suspend:
+#    пока идёт дамп, новые записи не должны попадать в старую БД.
+#    Агенты переподключатся сами после Resume.
+
 # 1. Схема + данные (скрипт сам снимет дамп, восстановит и сверит prisma-схему)
-SOURCE_URL='postgresql://...render.com/pc_remote' \
+SOURCE_URL='postgresql://...render.com/pc_remote?sslmode=require' \
 TARGET_URL='postgresql://...neon.tech/neondb?sslmode=require' \
 ./scripts/migrate-db.sh
 
-# 2. Render → сервис → Environment → DATABASE_URL = Neon URL → Save (перезапуск)
+# 2. Render → сервис → Environment → DATABASE_URL = Neon URL → Save
+#    (Save перезапускает сервис; Suspend снимется после деплоя)
 # 3. Проверка
 curl -s https://pc-remote-backend.onrender.com/health
 ```
+
+Требования: `pg_dump`/`psql` версии 15+ в `PATH` (в этом окружении 18.6), Node.js 20+.
+Строки подключения берите в одинарные кавычки — в паролях бывают `&`, `#`, `$`.
+Render external URL обычно требует `?sslmode=require`; Neon direct URL уже содержит
+`sslmode=require`.
+
+Откат: вернуть прежний `DATABASE_URL` в Render. Всё, что успело записаться в Neon
+за время проверки, при откате будет потеряно — поэтому проверяйте сразу после Save.
+
+После успешной проверки старую Render-базу можно удалить (особенно free, которая
+удаляется через 30 дней сама).
 
 `SKIP_DATA=1` — только применить схему (чистая база). `KEEP_DUMP=1` — сохранить дамп
 в `/tmp/pc-remote-dump.sql`.
