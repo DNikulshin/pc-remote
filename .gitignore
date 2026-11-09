@@ -45,5 +45,9 @@ Thumbs.db
 # Claude Code local settings (per-user, not shared)
 .claude/settings.local.json
 
+# Pi harness artifacts and sessions
+.pi/artifacts/
+.pi/sessions/
+
 # npm lockfile (monorepo uses pnpm)
 package-lock.json
