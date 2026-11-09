@@ -56,11 +56,37 @@ docker run -p 3000:3000 \
 
 ## Переезд БД на Neon
 
-1. Создать проект на neon.com (Free, без карты), скопировать **pooled** connection string
-   (`...-pooler...?sslmode=require`).
-2. Применить схему: `DATABASE_URL='<neon-url>' pnpm --filter backend db:push`.
-3. Поменять `DATABASE_URL` в env хостинга и перезапустить сервис.
-4. Проверить: `GET /health`, `POST /api/auth/register` и привязку устройства по QR.
+Нужны два connection string:
+
+- **Render Postgres** → Dashboard → база → *Connect* → **External Database URL**
+  (например `postgresql://user:pass@dpg-xxxx.oregon-postgres.render.com/pc_remote`).
+- **Neon** → Dashboard → *Connect* → **direct** URL (без `-pooler`), регион eu-central
+  для минимальной задержки из РФ.
+
+Порядок:
+
+```bash
+# 1. Схема + данные (скрипт сам снимет дамп, восстановит и сверит prisma-схему)
+SOURCE_URL='postgresql://...render.com/pc_remote' \
+TARGET_URL='postgresql://...neon.tech/neondb?sslmode=require' \
+./scripts/migrate-db.sh
+
+# 2. Render → сервис → Environment → DATABASE_URL = Neon URL → Save (перезапуск)
+# 3. Проверка
+curl -s https://pc-remote-backend.onrender.com/health
+```
+
+`SKIP_DATA=1` — только применить схему (чистая база). `KEEP_DUMP=1` — сохранить дамп
+в `/tmp/pc-remote-dump.sql`.
+
+Почему **direct**, а не `-pooler`: контейнер при старте выполняет `prisma db push` (DDL),
+а Prisma не рекомендует гонять миграции через transaction pooler. Для долгоживущего
+одного контейнера direct-соединения Neon достаточно.
+
+Что сохраняется при переезде: пользователи, устройства и их `agentToken` (привязки не
+слетают), расписания, история команд. `JWT_SECRET` не меняется — мобильные сессии живы.
+
+После переезда удалите free Postgres на Render, чтобы не упереться в его 30-дневный лимит.
 
 ## Проверка доступности из РФ
 
