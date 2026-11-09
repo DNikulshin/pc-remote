@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Документация и локальная сборка
+    url: https://github.com/DNikulshin/pc-remote/blob/main/BUILD.md
+    about: Как собрать APK, установщик и запустить backend локально
+  - name: Тестирование
+    url: https://github.com/DNikulshin/pc-remote/blob/main/TESTING.md
+    about: Ручные сценарии и прогон автотестов перед созданием issue
+  - name: Готовые сборки
+    url: https://github.com/DNikulshin/pc-remote/releases/latest
+    about: APK, установщик Windows, portable-агент и docker-образ
+  - name: Сообщить об уязвимости
+    url: https://github.com/DNikulshin/pc-remote/security/advisories/new
+    about: Приватно, через GitHub Security Advisories (не публичный issue)

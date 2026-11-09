@@ -1,0 +1,82 @@
+name: 🐞 Баг-репорт
+description: Что-то работает не так — приложение, агент, backend или установщик
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за отчёт. Перед созданием issue проверьте
+        [TESTING.md](https://github.com/DNikulshin/pc-remote/blob/main/TESTING.md) и существующие issues.
+
+        ⚠️ Не прикладывайте токены, пароли, `.env`, QR-коды и приватные IP.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Компонент
+      options:
+        - Mobile (Android / Expo)
+        - Agent (Windows)
+        - Установщик / трей (Windows)
+        - Backend / API
+        - CI / релизы
+        - Другое
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Версия
+      description: Тег релиза, версия APK или commit SHA
+      placeholder: v1.0.0 / f3a9c21
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Окружение
+      description: ОС и версия, версия Node.js, способ запуска (Docker / локально / служба)
+      placeholder: |
+        Windows 11 23H2, agent.exe из setup v1.0.0
+        Backend: локально, Node 22, PostgreSQL 18
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. Открыть экран устройств
+        2. Нажать «Скриншот»
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Фактическое поведение
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи / скриншоты
+      description: Вывод консоли, `apps/agent/logs/`, ответ API. Секреты удалите.
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Чек-лист
+      options:
+        - label: Я поискал(а) похожие issues и прочитал(а) TESTING.md
+          required: true
+        - label: В отчёте нет секретов, токенов и персональных данных
+          required: true

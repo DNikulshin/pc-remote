@@ -124,6 +124,7 @@ backend'а, `Build Android APK` и `Build Windows Agent Installer` — на те
 - [TESTING.md](TESTING.md) — ручное и автоматическое тестирование
 - [CLAUDE.md](CLAUDE.md) — соглашения по коду и архитектуре
 - [AGENTS.md](AGENTS.md) — правила для AI-агентов и команды проверок
+- [SECURITY.md](.github/SECURITY.md) — как сообщить об уязвимости
 
 ## Лицензия
 

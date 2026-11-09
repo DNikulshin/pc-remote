@@ -1,0 +1,58 @@
+name: ✨ Предложение
+description: Идея новой функции или улучшения PC Remote
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Опишите задачу, а не только решение: что вы хотите делать и почему.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Область
+      options:
+        - Mobile (Android / Expo)
+        - Agent (Windows)
+        - Установщик / трей (Windows)
+        - Backend / API
+        - Расписание и лимиты
+        - CI / релизы / документация
+        - Другое
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Проблема / сценарий
+      description: Что сейчас неудобно или чего не хватает
+      placeholder: Хочу удалённо включать ПК по расписанию, сейчас можно только выключать.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предлагаемое решение
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы
+      description: Как это можно решить иначе или обойтись без изменений
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Дополнительный контекст
+      description: Ссылки, макеты, похожие реализации
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Чек-лист
+      options:
+        - label: Я поискал(а) похожие предложения в issues
+          required: true
