@@ -8,7 +8,16 @@ on:
       - 'packages/shared/**'
       - '.github/workflows/build-agent.yml'
       - 'installer/**'
+    # Тег v* собирает установщик и прикрепляет его к GitHub Release
+    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Прикрепить установщик к существующему релизу (например v1.0.0)'
+        required: false
+
+permissions:
+  contents: write
 
 jobs:
   test:
@@ -85,3 +94,23 @@ jobs:
           name: pc-remote-agent-setup
           path: installer/output/pc-remote-agent-setup.exe
           retention-days: 30
+
+      # Для тега или ручного запуска с release_tag — кладём установщик в релиз.
+      # Создаём релиз, если его ещё нет (APK-джоба может завершиться позже).
+      - name: Attach installer to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
+        shell: bash
+        run: |
+          set -e
+          ASSET="pc-remote-agent-${RELEASE_TAG}-setup.exe"
+          cp installer/output/pc-remote-agent-setup.exe "$ASSET"
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$ASSET" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$ASSET" \
+              --title "PC Remote $RELEASE_TAG" \
+              --generate-notes
+          fi
