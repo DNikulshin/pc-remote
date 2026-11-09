@@ -120,6 +120,7 @@ backend'а, `Build Android APK` и `Build Windows Agent Installer` — на те
 
 ## Документация
 
+- [DEPLOY.md](DEPLOY.md) — деплой backend, бесплатные хостинги и доступность из РФ
 - [BUILD.md](BUILD.md) — сборка APK и Windows-инсталлятора
 - [TESTING.md](TESTING.md) — ручное и автоматическое тестирование
 - [CLAUDE.md](CLAUDE.md) — соглашения по коду и архитектуре
