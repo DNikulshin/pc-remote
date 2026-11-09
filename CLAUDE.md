@@ -133,7 +133,7 @@ Password: Test1234
 ```json
 {
   "deviceId": "uuid",
-  "agentToken": "jwt",
+  "agentToken": "hex token",
   "secret": "hex (только до привязки)",
   "timezone": "Europe/Moscow",
   "passwordHash": "bcrypt hash"
@@ -142,24 +142,32 @@ Password: Test1234
 
 ## Деплой
 
-### Render (backend)
+### Backend
 
-1. Создать Web Service на render.com
-2. Добавить PostgreSQL сервис — `DATABASE_URL` подставится автоматически
-3. Добавить env vars: `JWT_SECRET`, `JWT_REFRESH_SECRET`, `NODE_ENV=production`
-4. Render использует `Dockerfile` из корня репозитория
+Два поддерживаемых способа — оба используют `Dockerfile` из корня репозитория:
 
-URL продакшн бекенда: `https://pc-remote-backend.onrender.com`
-
-> `keep-alive.yml` пингует `/health` каждые 10 минут — Render free tier засыпает без активности.
+1. **Render**: Web Service + PostgreSQL сервис (`DATABASE_URL` подставляется
+   автоматически), env `JWT_SECRET`, `JWT_REFRESH_SECRET`, `NODE_ENV=production`.
+   URL продакшн-бекенда: `https://pc-remote-backend.onrender.com`.
+   Free tier засыпает без активности (keep-alive workflow удалён).
+2. **GHCR-образ**: `ghcr.io/dnikulshin/pc-remote-api` — публикуется workflow
+   `publish-api.yml` (main → `latest`/`main`/`sha-*`, тег `v*` → semver-теги).
 
 ### GitHub Actions
 
-- **`build-agent.yml`** — собирает Windows installer (`.exe`) при push в main
-- **`build-mobile.yml`** — собирает Android APK (EAS local build) при изменениях в `apps/mobile/**`
+- **`test.yml`** — agent unit, backend integration (Postgres service), mobile unit
+- **`publish-api.yml`** — сборка и публикация docker-образа в GHCR
+- **`build-agent.yml`** — Windows installer + portable `agent.exe` (push в main по
+  путям `apps/agent/**`; на тег `v*` — прикрепляет файлы к GitHub Release)
+- **`build-mobile.yml`** — Android APK (EAS local build; на тег `v*` — релиз с APK)
+
+Релиз: `git tag vX.Y.Z && git push origin vX.Y.Z` — образ, APK и Windows-артефакты
+собираются параллельно и попадают в один GitHub Release.
 
 Секреты GitHub (Settings → Secrets → Actions):
 - `EXPO_TOKEN` — токен EAS (`eas whoami`, затем `eas token:create`)
+- `GITHUB_TOKEN` — выдаётся автоматически (`packages: write` для GHCR, `contents: write`
+  для релизов)
 
 ### Туннели для разработки
 
@@ -203,7 +211,7 @@ URL продакшн бекенда: `https://pc-remote-backend.onrender.com`
 ## Архитектура
 
 ```
-Mobile App ──HTTP/WS──► Backend (Railway)
+Mobile App ──HTTP/WS──► Backend (Render / Docker)
                               │
                          Socket.io
                               │
