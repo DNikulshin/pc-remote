@@ -1,6 +1,6 @@
 ---
 name: review
-description: Ревью диффа: баги, пропущенные тесты, безопасность, стиль.
+description: "Ревью диффа: баги, пропущенные тесты, безопасность, стиль."
 model: polza-ai/openai/gpt-6-luna-pro
 thinking: medium
 tools: read, grep, find, ls, bash

@@ -1,6 +1,6 @@
 ---
 name: code
-description: Реализация по готовому плану: правки кода и тесты.
+description: "Реализация по готовому плану: правки кода и тесты."
 model: polza-ai/deepseek/deepseek-v4.1-flash
 tools: read, grep, find, ls, edit, write, bash
 ---
